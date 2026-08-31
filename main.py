@@ -1,127 +1,54 @@
 import os
-import json
-import random
 import discord
 from discord.ext import commands
+import requests
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable is missing")
+    raise RuntimeError("BOT_TOKEN is not set in Railway Variables")
 
-BASE_FOLDER = os.path.dirname(os.path.abspath(__file__))
-FOLDER = os.path.join(BASE_FOLDER, "files")
+intents = discord.Intents.default()
+intents.message_content = True
 
-
-class Bot(commands.Bot):
-    def __init__(self):
-        super().__init__(
-            command_prefix="!",
-            intents=discord.Intents.default()
-        )
-
-    async def setup_hook(self):
-        await self.tree.sync()
-
-
-bot = Bot()
-
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents
+)
 
 @bot.event
 async def on_ready():
-    print(f"Online: {bot.user}")
-    os.makedirs(FOLDER, exist_ok=True)
+    print(f"Logged in as {bot.user}")
 
+@bot.command()
+async def auth(ctx):
+    url = "https://animalcompany.us-east1.nakamacloud.io/"
 
-@bot.tree.command(
-    name="generate_token",
-    description="Fetch an AC token"
-)
-async def generate_token(
-    interaction: discord.Interaction
-):
-    await interaction.response.defer(ephemeral=True)
+    payload = {
+  "tid": "6c0d31d7-83cf-4cf7-80fb-6e767c7a73de",
+  "uid": "e2205f6c-7d06-449c-90df-8d6f217cad2a",
+  "usn": "uAMyng4XNexqRWyL",
+  "vrs": {
+    "authID": "86b24019d46e43e98151ad1d67fe2313",
+    "clientUserAgent": "SteamVR 1.88.1.3421_a3df6ce5",
+    "deviceID": "6e966ac701018e17cdc3f60884880618066128bf"
+  },
+  "exp": 1788311304,
+  "iat": 1787706274,
+}
 
-    try:
-        files = [
-            os.path.join(FOLDER, name)
-            for name in os.listdir(FOLDER)
-            if os.path.isfile(os.path.join(FOLDER, name))
-            and name.lower().endswith(".json")
-        ]
+    response = requests.post(
+        url,
+        json=payload,
+        headers={"Content-Type": "application/json"}
+    )
 
-        if not files:
-            await interaction.followup.send(
-                "❌ No JSON tokens available.",
-                ephemeral=True
-            )
-            return
+    print("API status:", response.status_code)
+    print("API response:", response.text)
 
-        chosen_file = random.choice(files)
-
-        await interaction.followup.send(
-            file=discord.File(chosen_file),
-            ephemeral=True
-        )
-
-        os.remove(chosen_file)
-
-        print(f"Sent and deleted: {chosen_file}")
-
-    except Exception as e:
-        print("GENERATE ERROR:", repr(e))
-
-        await interaction.followup.send(
-            f"❌ Error: `{e}`",
-            ephemeral=True
-        )
-
-
-@bot.tree.command(
-    name="status",
-    description="Show token system status"
-)
-async def status(
-    interaction: discord.Interaction
-):
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        os.makedirs(FOLDER, exist_ok=True)
-
-        file_count = sum(
-            os.path.isfile(
-                os.path.join(FOLDER, name)
-            )
-            for name in os.listdir(FOLDER)
-        )
-
-        result = {
-            "public_pool": {
-                "status": (
-                    "available"
-                    if file_count > 0
-                    else "empty"
-                ),
-                "files": file_count
-            }
-        }
-
-        await interaction.followup.send(
-            "📊 **System Status**\n"
-            f"```json\n"
-            f"{json.dumps(result, indent=2)}\n"
-            f"```",
-            ephemeral=True
-        )
-
-    except Exception as e:
-        print("STATUS ERROR:", repr(e))
-
-        await interaction.followup.send(
-            f"❌ Status failed: `{e}`",
-            ephemeral=True
-        )
-
+    if response.ok:
+        await ctx.send("Authentication request succeeded.")
+    else:
+        await ctx.send(f"API request failed: `{response.status_code}`")
 
 bot.run(BOT_TOKEN)
